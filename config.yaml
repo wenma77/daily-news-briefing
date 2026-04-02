@@ -1,0 +1,69 @@
+{
+  "project_name": "每日重点新闻简报",
+  "schedule": {
+    "cron": "0 8 * * *",
+    "timezone": "Asia/Shanghai"
+  },
+  "recency_hours": 24,
+  "max_candidates_per_source": 20,
+  "max_candidates_for_llm": 36,
+  "headline_count": 6,
+  "brief_count": 6,
+  "keyword_count": 5,
+  "article_char_limit": 3200,
+  "dedupe": {
+    "title_similarity": 0.88,
+    "event_similarity": 0.78
+  },
+  "mail": {
+    "subject_template": "[{date}] 每日重点新闻简报"
+  },
+  "sources": [
+    {
+      "name": "Google News 中国",
+      "url": "https://news.google.com/rss/search?q=%E4%B8%AD%E5%9B%BD&hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
+      "category_hint": "国内"
+    },
+    {
+      "name": "Google News 国际",
+      "url": "https://news.google.com/rss/search?q=%E5%9B%BD%E9%99%85&hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
+      "category_hint": "国际"
+    },
+    {
+      "name": "Google News 财经",
+      "url": "https://news.google.com/rss/search?q=%E8%B4%A2%E7%BB%8F&hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
+      "category_hint": "财经"
+    },
+    {
+      "name": "Google News 科技",
+      "url": "https://news.google.com/rss/search?q=%E7%A7%91%E6%8A%80&hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
+      "category_hint": "科技"
+    },
+    {
+      "name": "Reuters World",
+      "url": "https://feeds.reuters.com/reuters/worldNews",
+      "category_hint": "国际"
+    },
+    {
+      "name": "Reuters Business",
+      "url": "https://feeds.reuters.com/reuters/businessNews",
+      "category_hint": "财经"
+    },
+    {
+      "name": "Reuters Technology",
+      "url": "https://feeds.reuters.com/reuters/technologyNews",
+      "category_hint": "科技"
+    },
+    {
+      "name": "TechCrunch",
+      "url": "https://techcrunch.com/feed/",
+      "category_hint": "科技"
+    },
+    {
+      "name": "36Kr",
+      "url": "https://36kr.com/feed",
+      "category_hint": "科技"
+    }
+  ]
+}
+
