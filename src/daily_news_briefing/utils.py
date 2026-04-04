@@ -46,6 +46,26 @@ def truncate_text(text: str, limit: int) -> str:
     return cleaned[: max(limit - 1, 0)].rstrip() + "…"
 
 
+def trim_complete_sentence(text: str, limit: int) -> str:
+    cleaned = normalize_space(text).rstrip("…")
+    if len(cleaned) <= limit:
+        return cleaned
+    trimmed = cleaned[:limit].rstrip()
+    strong_punct = "。！？!?；;"
+    strong_positions = [index for index, char in enumerate(trimmed) if char in strong_punct]
+    if strong_positions:
+        last = strong_positions[-1] + 1
+        if last >= max(int(limit * 0.5), 12):
+            return trimmed[:last].strip()
+    soft_punct = "，,、"
+    soft_positions = [index for index, char in enumerate(trimmed) if char in soft_punct]
+    if soft_positions:
+        last = soft_positions[-1]
+        if last >= max(int(limit * 0.65), 18):
+            return trimmed[:last].strip()
+    return trimmed.rstrip("，,、;；:： ").strip()
+
+
 def sha1_text(text: str, length: int = 12) -> str:
     return hashlib.sha1(text.encode("utf-8")).hexdigest()[:length]
 
@@ -81,4 +101,3 @@ def safe_filename(text: str) -> str:
     cleaned = re.sub(r"[^\w\-]+", "-", text.strip(), flags=re.UNICODE)
     cleaned = re.sub(r"-{2,}", "-", cleaned).strip("-")
     return cleaned or "preview"
-

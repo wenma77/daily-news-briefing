@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from .article import fetch_article_text
 from .config import Settings
@@ -16,6 +18,8 @@ from .rss import fetch_feed_candidates
 from .state import load_seen_events, recent_fingerprints, save_seen_events
 from .utils import safe_filename, utc_now
 
+SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
+
 
 @dataclass(slots=True)
 class PipelineResult:
@@ -27,6 +31,15 @@ class PipelineResult:
     total_candidates: int
     deduped_candidates: int
     grouped_events: int
+    cleaned_candidates: int
+    curated_events: int
+    source_counts: dict[str, int]
+    official_source_hits: int
+    items_with_domestic_reference: int
+    lead_family_counts: dict[str, int]
+    source_zero_hits: list[str]
+    google_news_primary_links: int
+    health_warnings: list[str]
 
 
 class NewsPipeline:
@@ -37,24 +50,30 @@ class NewsPipeline:
                 base_url=settings.runtime.openai_base_url,
                 api_key=settings.runtime.openai_api_key,
                 model=settings.runtime.openai_model,
+                reasoning_effort=settings.runtime.openai_reasoning_effort,
             ),
             headline_count=settings.headline_count,
             brief_count=settings.brief_count,
             keyword_count=settings.keyword_count,
             event_similarity=settings.dedupe.event_similarity,
+            source_registry={source.name: source for source in settings.sources},
         )
 
     def generate(self) -> PipelineResult:
         candidates = self._collect_candidates()
+        source_counts = self._source_counts(candidates)
         deduped = dedupe_candidates(candidates, title_similarity=self.settings.dedupe.title_similarity)
-        llm_input = deduped[: self.settings.max_candidates_for_llm]
+        ranked = sorted(deduped, key=self.editor.quality_score, reverse=True)
+        enriched = self._enrich_candidates(ranked[: max(self.settings.max_candidates_for_llm + 24, 80)])
+        llm_input = enriched[: self.settings.max_candidates_for_llm]
 
         cleaned = self.editor.clean_candidates(llm_input)
         seen = load_seen_events(self.settings.state_file)
         recent = recent_fingerprints(seen, retention_days=3)
-        events = self.editor.group_events(cleaned, recent)
+        grouped = self.editor.group_events(cleaned, recent)
+        events = self.editor.curate_events(grouped)
 
-        date_label = datetime.now().strftime("%Y-%m-%d")
+        date_label = datetime.now(SHANGHAI_TZ).strftime("%Y-%m-%d")
         draft = self.editor.draft_newsletter(
             events,
             date_label=date_label,
@@ -73,6 +92,19 @@ class NewsPipeline:
             for item in (draft.lead_items + draft.brief_items)
             if item.event_id in event_by_id
         ]
+        items_with_domestic_reference = sum(
+            1 for item in (draft.lead_items + draft.brief_items) if item.domestic_reference_url
+        )
+        official_source_hits = self._official_source_hits(source_counts, self.settings.sources)
+        source_zero_hits = self._source_zero_hits(source_counts, self.settings.sources)
+        lead_family_counts = self._lead_family_counts(draft, event_by_id)
+        google_news_primary_links = self._google_news_primary_links(draft)
+        health_warnings = self._health_warnings(
+            source_counts=source_counts,
+            total_candidates=len(candidates),
+            sources=self.settings.sources,
+            google_news_primary_links=google_news_primary_links,
+        )
 
         return PipelineResult(
             draft=draft,
@@ -82,7 +114,16 @@ class NewsPipeline:
             selected_fingerprints=selected_fingerprints,
             total_candidates=len(candidates),
             deduped_candidates=len(deduped),
-            grouped_events=len(events),
+            grouped_events=len(grouped),
+            cleaned_candidates=len(cleaned),
+            curated_events=len(events),
+            source_counts=source_counts,
+            official_source_hits=official_source_hits,
+            items_with_domestic_reference=items_with_domestic_reference,
+            lead_family_counts=lead_family_counts,
+            source_zero_hits=source_zero_hits,
+            google_news_primary_links=google_news_primary_links,
+            health_warnings=health_warnings,
         )
 
     def preview(self, output_path: Path | None = None) -> Path:
@@ -138,14 +179,82 @@ class NewsPipeline:
                 )
             except Exception:
                 continue
-            for item in source_candidates:
-                try:
-                    article_text, source_kind = fetch_article_text(item.url, char_limit=self.settings.article_char_limit)
-                except Exception:
-                    article_text, source_kind = "", "feed"
-                item.article_text = article_text
-                item.article_text_source = source_kind
             candidates.extend(source_candidates)
+        return candidates
+
+    @staticmethod
+    def _source_counts(candidates: list[ArticleCandidate]) -> dict[str, int]:
+        return dict(Counter(item.source for item in candidates))
+
+    @staticmethod
+    def _official_source_hits(source_counts: dict[str, int], sources: list) -> int:
+        official_names = {
+            source.name
+            for source in sources
+            if getattr(source, "role", "discovery") == "official"
+        }
+        return sum(1 for source, count in source_counts.items() if source in official_names and count > 0)
+
+    @staticmethod
+    def _source_zero_hits(source_counts: dict[str, int], sources: list) -> list[str]:
+        return [source.name for source in sources if source_counts.get(source.name, 0) == 0]
+
+    def _lead_family_counts(self, draft: NewsletterDraft, event_by_id: dict[str, object]) -> dict[str, int]:
+        counts: Counter[str] = Counter()
+        for item in draft.lead_items:
+            event = event_by_id.get(item.event_id)
+            if event is None:
+                continue
+            counts[self.editor.event_family(event)] += 1
+        return dict(counts)
+
+    @staticmethod
+    def _google_news_primary_links(draft: NewsletterDraft) -> int:
+        return sum(
+            1
+            for item in (draft.lead_items + draft.brief_items)
+            if "news.google.com" in item.link
+        )
+
+    @staticmethod
+    def _health_warnings(
+        *,
+        source_counts: dict[str, int],
+        total_candidates: int,
+        sources: list,
+        google_news_primary_links: int,
+    ) -> list[str]:
+        warnings: list[str] = []
+        direct_official_sources = [
+            source.name
+            for source in sources
+            if getattr(source, "role", "discovery") == "official" and getattr(source, "fetcher", "rss") == "html_list"
+        ]
+        missing_official = [source for source in direct_official_sources if source_counts.get(source, 0) == 0]
+        if direct_official_sources and len(missing_official) == len(direct_official_sources):
+            warnings.append("所有直连官方源今日均未产出候选。")
+        elif missing_official:
+            warnings.append("部分直连官方源今日未产出候选：" + "、".join(missing_official))
+        if total_candidates < 40:
+            warnings.append(f"总候选数偏低：{total_candidates}。")
+        if google_news_primary_links > 0:
+            warnings.append(f"部分最终条目仍使用 Google News 聚合链接：{google_news_primary_links} 条。")
+        return warnings
+
+    def _enrich_candidates(self, candidates: list[ArticleCandidate]) -> list[ArticleCandidate]:
+        for item in candidates:
+            if item.article_text or item.article_text_source != "feed":
+                continue
+            try:
+                article_text, source_kind, resolved_url = fetch_article_text(
+                    item.url,
+                    char_limit=self.settings.article_char_limit,
+                )
+            except Exception:
+                article_text, source_kind, resolved_url = "", "feed", item.url
+            item.article_text = article_text
+            item.article_text_source = source_kind
+            item.url = resolved_url or item.url
         return candidates
 
     def _mailer(self) -> GenericSMTPMailer:
@@ -174,4 +283,3 @@ class NewsPipeline:
         missing = self.settings.runtime.missing_mail()
         if missing:
             raise RuntimeError("缺少邮件相关环境变量：" + ", ".join(missing))
-

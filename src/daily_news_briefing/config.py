@@ -30,6 +30,7 @@ class RuntimeEnv:
     openai_base_url: str
     openai_api_key: str
     openai_model: str
+    openai_reasoning_effort: str
     smtp_host: str
     smtp_port: int
     smtp_user: str
@@ -107,6 +108,7 @@ def load_settings(project_root: Path | None = None) -> Settings:
         openai_base_url=os.getenv("OPENAI_BASE_URL", "").strip(),
         openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
         openai_model=os.getenv("OPENAI_MODEL", "").strip(),
+        openai_reasoning_effort=os.getenv("OPENAI_REASONING_EFFORT", "xhigh").strip() or "xhigh",
         smtp_host=os.getenv("SMTP_HOST", "smtp.qq.com").strip(),
         smtp_port=int(os.getenv("SMTP_PORT", "465").strip() or "465"),
         smtp_user=os.getenv("SMTP_USER", "").strip(),
@@ -120,6 +122,10 @@ def load_settings(project_root: Path | None = None) -> Settings:
             name=item["name"],
             url=item["url"],
             category_hint=item["category_hint"],
+            fetcher=item.get("fetcher", "rss"),
+            parser=item.get("parser", ""),
+            tier=item.get("tier", "A"),
+            role=item.get("role", "discovery"),
         )
         for item in raw["sources"]
     ]
@@ -140,4 +146,3 @@ def load_settings(project_root: Path | None = None) -> Settings:
         sources=sources,
         runtime=runtime,
     )
-

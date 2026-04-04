@@ -14,6 +14,7 @@ def _candidate(title: str, url: str) -> ArticleCandidate:
         id=title,
         title=title,
         source="测试源",
+        publisher="测试源",
         published_at=datetime(2026, 4, 2, 0, 0, tzinfo=UTC),
         url=url,
         feed_summary="摘要",

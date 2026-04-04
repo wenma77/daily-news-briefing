@@ -10,6 +10,10 @@ class FeedSource:
     name: str
     url: str
     category_hint: str
+    fetcher: str = "rss"
+    parser: str = ""
+    tier: str = "A"
+    role: str = "discovery"
 
 
 @dataclass(slots=True)
@@ -17,6 +21,7 @@ class ArticleCandidate:
     id: str
     title: str
     source: str
+    publisher: str
     published_at: datetime
     url: str
     feed_summary: str
@@ -29,6 +34,7 @@ class ArticleCandidate:
             "id": self.id,
             "title": self.title,
             "source": self.source,
+            "publisher": self.publisher,
             "published_at": self.published_at.isoformat(),
             "url": self.url,
             "feed_summary": self.feed_summary,
@@ -44,10 +50,13 @@ class EventCard:
     title: str
     category: str
     importance_score: int
-    why_it_matters: str
     summary: str
     article_ids: list[str]
     representative_url: str
+    source_name: str
+    domestic_reference_url: str = ""
+    domestic_reference_name: str = ""
+    why_it_matters: str = ""
     fingerprint: str = ""
 
     def to_prompt_dict(self) -> dict[str, Any]:
@@ -59,9 +68,12 @@ class NewsletterItem:
     event_id: str
     title: str
     summary: str
-    why_important: str
     link: str
     category: str
+    source_name: str
+    domestic_reference_url: str = ""
+    domestic_reference_name: str = ""
+    why_important: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -73,6 +85,7 @@ class NewsletterDraft:
     overview: str
     lead_items: list[NewsletterItem] = field(default_factory=list)
     brief_items: list[NewsletterItem] = field(default_factory=list)
+    watch_items: list[str] = field(default_factory=list)
     keywords: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -81,6 +94,7 @@ class NewsletterDraft:
             "overview": self.overview,
             "lead_items": [item.to_dict() for item in self.lead_items],
             "brief_items": [item.to_dict() for item in self.brief_items],
+            "watch_items": self.watch_items,
             "keywords": self.keywords,
         }
 
