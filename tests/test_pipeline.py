@@ -910,6 +910,18 @@ class EditorPolicyTests(unittest.TestCase):
         cleaned = editor._clean_title_text("美伊停火斡旋陷入僵局 中东最大铝生产商工厂遭袭受损严重 | 环球市场（含视频）")
         self.assertEqual(cleaned, "美伊停火斡旋陷入僵局 中东最大铝生产商工厂遭袭受损严重")
 
+    def test_sanitize_summary_removes_comment_prompt_and_download_tail(self) -> None:
+        editor = self._editor()
+        raw = "市场监管总局通报44批次食品抽检不合格情况，涉及多个品类。想要发表评论，阅读更多精彩内容，快来下载客户端吧"
+        cleaned = editor._sanitize_summary_text(raw, "")
+        self.assertEqual(cleaned, "市场监管总局通报44批次食品抽检不合格情况，涉及多个品类。")
+
+    def test_sanitize_summary_removes_aggregator_media_footer(self) -> None:
+        editor = self._editor()
+        raw = "山体爆破致附近村民受伤房屋受损，官方已通报。新浪网 | 网易 | 搜狐 | UC头条 | 新华网 | 中新网 | 慧科讯业 | 今日头条 | 一点资讯 | 千龙"
+        cleaned = editor._sanitize_summary_text(raw, "")
+        self.assertEqual(cleaned, "山体爆破致附近村民受伤房屋受损，官方已通报。")
+
     def test_best_event_summary_does_not_use_unrelated_article_text(self) -> None:
         editor = self._editor()
         representative = ArticleCandidate(

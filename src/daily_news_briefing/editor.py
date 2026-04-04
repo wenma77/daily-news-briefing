@@ -316,6 +316,17 @@ TECH_GOSSIP_KEYWORDS = {
     "秘闻",
 }
 
+SUMMARY_NOISE_PATTERNS = [
+    r"想要发表评论.*$",
+    r"阅读更多精彩内容.*$",
+    r"快来下\s*载客户端吧.*$",
+    r"快来下载客户端吧.*$",
+    r"下载客户端.*$",
+    r"责任编辑[:：].*$",
+    r"点击进入专题.*$",
+    r"(?:新浪网|网易|搜狐|UC头条|新华网|中新网|慧科讯业|今日头条|一点资讯|千龙)(?:\s*[|｜]\s*(?:新浪网|网易|搜狐|UC头条|新华网|中新网|慧科讯业|今日头条|一点资讯|千龙))+.*$",
+]
+
 PUBLIC_IMPACT_TOPIC_KEYWORDS = {
     "AI",
     "人工智能",
@@ -2629,7 +2640,10 @@ class AINewsEditor:
         text = re.sub(r"\b(?:https?://)?(?:www\.)?[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", "", text)
         if source_name:
             text = text.replace(source_name, "")
+        for pattern in SUMMARY_NOISE_PATTERNS:
+            text = re.sub(pattern, "", text, flags=re.I | re.S)
         text = re.sub(r"^(原标题[:：]\s*)", "", text)
+        text = re.sub(r"\s*[|｜]\s*$", "", text)
         text = re.sub(r"[?？!！]{2,}", "", text)
         text = re.sub(r"[.…]{2,}$", "", text)
         return re.sub(r"\s{2,}", " ", text).strip(" -|_")
