@@ -2,7 +2,7 @@ name: Daily News Briefing
 
 on:
   schedule:
-    - cron: "0 8 * * *"
+    - cron: "15 8 * * *"
       timezone: "Asia/Shanghai"
   workflow_dispatch:
     inputs:
